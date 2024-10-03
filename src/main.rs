@@ -1,12 +1,14 @@
+use dotenvy::dotenv;
 use mogakko_bot::{Bot, Config};
 use std::env;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	let token =
-		env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+	dotenv()?;
 
-	let config = Config { token };
+	let config = Config {
+		token: env::var("DISCORD_TOKEN")?,
+	};
 
 	let mut bot = Bot::new(config).await?;
 
