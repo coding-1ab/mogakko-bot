@@ -7,4 +7,5 @@ edition = "2021"
 anyhow = "1.0.89"
 dotenvy = "0.15.7"
 serenity = "0.12.2"
+sqlx = { version = "0.8.2", features = ["runtime-tokio"] }
 tokio = { version = "1", features = ["full"] }
