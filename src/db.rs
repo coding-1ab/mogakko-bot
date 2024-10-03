@@ -27,12 +27,18 @@ impl Db {
 	}
 
 	// when user joins
-	pub async fn joins(user: u64, when: PrimitiveDateTime) {
+	pub async fn joins(
+		user: u64,
+		when: PrimitiveDateTime,
+	) -> anyhow::Result<()> {
 		todo!()
 	}
 
 	// when user leaves
-	pub async fn leaves(user: u64, when: PrimitiveDateTime) {
+	pub async fn leaves(
+		user: u64,
+		when: PrimitiveDateTime,
+	) -> anyhow::Result<()> {
 		todo!()
 	}
 
