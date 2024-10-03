@@ -3,10 +3,12 @@ use std::sync::Arc;
 use serenity::async_trait;
 use serenity::prelude::*;
 
+use crate::db::Db;
 use crate::Config;
 
 pub struct Handler {
 	config: Arc<Config>,
+	db: Db,
 }
 
 #[async_trait]
@@ -14,7 +16,10 @@ impl EventHandler for Handler {}
 
 impl Handler {
 	pub fn new(config: Arc<Config>) -> Self {
-		Self { config }
+		Self {
+			db: Db::new(config.clone()),
+			config,
+		}
 	}
 }
 
