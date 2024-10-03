@@ -1,9 +1,7 @@
 use serenity::async_trait;
 use serenity::prelude::*;
 
-pub struct Config {
-	pub token: String,
-}
+use crate::Config;
 
 pub struct Handler {
 	config: Config,
