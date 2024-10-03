@@ -1,17 +1,19 @@
+use std::sync::Arc;
+
 use serenity::async_trait;
 use serenity::prelude::*;
 
 use crate::Config;
 
 pub struct Handler {
-	config: Config,
+	config: Arc<Config>,
 }
 
 #[async_trait]
 impl EventHandler for Handler {}
 
 impl Handler {
-	pub fn new(config: Config) -> Self {
+	pub fn new(config: Arc<Config>) -> Self {
 		Self { config }
 	}
 }
@@ -22,14 +24,16 @@ pub struct Bot {
 
 impl Bot {
 	pub async fn new(config: Config) -> anyhow::Result<Self> {
+		let config = Arc::new(config);
+
+		let handler = Handler::new(config.clone());
+
 		let client = Client::builder(
 			&config.token,
 			GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT,
-		);
-
-		let handler = Handler::new(config);
-
-		let client = client.event_handler(handler).await?;
+		)
+		.event_handler(handler)
+		.await?;
 
 		Ok(Self { client })
 	}
