@@ -11,9 +11,6 @@ pub struct Handler {
 	db: Db,
 }
 
-#[async_trait]
-impl EventHandler for Handler {}
-
 impl Handler {
 	pub fn new(config: Arc<Config>) -> Self {
 		Self {
@@ -22,6 +19,9 @@ impl Handler {
 		}
 	}
 }
+
+#[async_trait]
+impl EventHandler for Handler {}
 
 pub struct Bot {
 	pub client: Client,
