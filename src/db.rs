@@ -1,7 +1,7 @@
 use std::{sync::Arc, u32};
 
 use sqlx::{Pool, Sqlite};
-use time::{Date, Duration, Month, OffsetDateTime, UtcOffset};
+use time::{Date, Duration};
 
 use crate::{
     utils::{is_valid_time, now_kst},
@@ -35,14 +35,15 @@ impl Db {
         Ok(Self { config, pool })
     }
 
-    async fn find_lock(&self, user: String) -> anyhow::Result<Option<u32>> {
-        let lock: Option<(u32,)> =
-            sqlx::query_as(r#"select id from vc_activities where user = ? and left = null"#)
-                .bind(user)
-                .fetch_optional(&self.pool)
-                .await?;
+    async fn find_lock(&self, user: String) -> anyhow::Result<Option<i64>> {
+        let lock = sqlx::query!(
+            r#"select id from vc_activities where user = ? and left is null"#,
+            user
+        )
+        .fetch_optional(&self.pool)
+        .await?;
 
-        Ok(lock.map(|(id,)| id))
+        Ok(lock.map(|r| r.id))
     }
 
     // when user joins
@@ -61,6 +62,7 @@ impl Db {
 
     // when user leaves
     pub async fn leaves(user: String) -> anyhow::Result<()> {
+        todo!()
         // sqlx::query(r#"update vc_activities set left = ? where "#)
     }
 
