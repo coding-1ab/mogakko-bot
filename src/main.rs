@@ -13,6 +13,7 @@ async fn main() -> anyhow::Result<()> {
             .expect("Environment Variable CHANNEL_ID not found!")
             .parse()
             .unwrap(),
+        database_url: env::var("DATABASE_URL").unwrap(),
     };
 
     let mut bot = Bot::new(config).await?;
