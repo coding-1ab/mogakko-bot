@@ -1,6 +1,6 @@
 use std::num::NonZeroU64;
 
 pub struct Config {
-    pub token: Box<str>,
+    pub token: String,
     pub vc_id: NonZeroU64,
 }
