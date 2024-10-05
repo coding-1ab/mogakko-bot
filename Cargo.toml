@@ -7,6 +7,6 @@ edition = "2021"
 anyhow = "1.0.89"
 dotenvy = "0.15.7"
 serenity = { version = "0.12.2", features = ["cache"] }
-sqlx = { version = "0.8.2", features = ["runtime-tokio"] }
+sqlx = { version = "0.8.2", features = ["runtime-tokio", "sqlite"] }
 time = { version = "0.3.36", features = ["local-offset"] }
 tokio = { version = "1", features = ["full"] }
