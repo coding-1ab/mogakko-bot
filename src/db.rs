@@ -90,12 +90,9 @@ impl Db {
 
         let is_first_time_today = self.is_first_time_today(user).await?;
 
-        sqlx::query!(
-            r#"update vc_activities set left = datetime('now') where id = ?"#,
-            id
-        )
-        .execute(&self.pool)
-        .await?;
+        sqlx::query_file!("src/queries/leave.sql", id)
+            .execute(&self.pool)
+            .await?;
 
         Ok(is_first_time_today)
     }
