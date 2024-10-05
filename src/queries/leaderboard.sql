@@ -12,4 +12,4 @@ group by
 	`user`
 order by
 	`total_duration` desc
-limit 5
+limit ?

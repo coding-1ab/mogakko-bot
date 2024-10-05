@@ -102,8 +102,8 @@ impl Db {
     }
 
     // get server leaderboard
-    pub async fn leaderboard(&self) -> anyhow::Result<Vec<LeaderboardRecord>> {
-        Ok(sqlx::query_file!("src/queries/leaderboard.sql")
+    pub async fn leaderboard(&self, limit: u32) -> anyhow::Result<Vec<LeaderboardRecord>> {
+        Ok(sqlx::query_file!("src/queries/leaderboard.sql", limit)
             .map(|row| LeaderboardRecord {
                 user: row.user.parse().unwrap(),
                 days: row.days as u32,
