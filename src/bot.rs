@@ -17,7 +17,7 @@ use time::{Date, Duration, Month, Weekday};
 use tokio::task::JoinSet;
 use tokio_cron::{daily, Job, Scheduler};
 
-use crate::db::LeaderboardRecord;
+use crate::db::{LeaderboardRecord, UserStatistics};
 use crate::utils::{is_valid_time, now_kst};
 use crate::{db::Db, Config};
 
@@ -478,7 +478,16 @@ impl Bot {
         client: Arc<Http>,
         target: u64,
     ) -> CreateInteractionResponseMessage {
-        let statistics = db.user_statistics(target).await.unwrap();
+        let statistics = match db.user_statistics(target).await.unwrap() {
+            Some(v) => v,
+            None => UserStatistics {
+                rank: 0,
+                user: target,
+                days: 0,
+                total_duration: Duration::ZERO,
+                calendar: vec![],
+            },
+        };
 
         let now = now_kst().date();
 

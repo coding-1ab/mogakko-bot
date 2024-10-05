@@ -15,7 +15,7 @@ pub struct LeaderboardRecord {
 }
 
 pub struct UserStatistics {
-    pub rank: NonZeroU32,
+    pub rank: u32,
     pub user: User,
     pub days: u32,
     pub total_duration: Duration,
@@ -109,7 +109,7 @@ impl Db {
     }
 
     // show user statistics
-    pub async fn user_statistics(&self, user: User) -> anyhow::Result<UserStatistics> {
+    pub async fn user_statistics(&self, user: User) -> anyhow::Result<Option<UserStatistics>> {
         let user = user.to_string();
 
         let st = sqlx::query_file!("src/queries/statistics.sql", user)
