@@ -1,13 +1,17 @@
-use std::env::var;
+use std::{env::var, io::ErrorKind};
 
-use dotenvy::dotenv;
+use dotenvy::{dotenv, Error};
 
 use mogakko_bot::{Bot, Config};
 use serenity::all::validate_token;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv()?;
+    match dotenv() {
+        Err(Error::Io(e)) if e.kind() == ErrorKind::NotFound => (),
+        Err(e) => return Err(e.into()),
+        _ => (),
+    }
 
     let token = var("DISCORD_TOKEN").expect("Environment Variable DISCORD_TOKEN not found!");
     validate_token(&token)?;
