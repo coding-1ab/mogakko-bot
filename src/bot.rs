@@ -6,7 +6,7 @@ use serenity::{
     prelude::*,
 };
 
-use crate::{db::Db, Config};
+use crate::{db::Db, Config, LogUtil};
 
 pub struct Handler {
     config: Arc<Config>,
