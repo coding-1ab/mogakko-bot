@@ -10,3 +10,4 @@ serenity = { version = "0.12.2", features = ["cache"] }
 sqlx = { version = "0.8.2", features = ["runtime-tokio", "sqlite"] }
 time = { version = "0.3.36", features = ["local-offset", "macros"] }
 tokio = { version = "1", features = ["full"] }
+tokio-cron = "0.1.3"

@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::sync::Arc;
 
 use serenity::all::{
-    CommandOptionType, CommandType, CreateCommand, CreateCommandOption, CreateEmbed,
+    ChannelId, CommandOptionType, CommandType, CreateCommand, CreateCommandOption, CreateEmbed,
     CreateInteractionResponse, CreateInteractionResponseMessage, Interaction, ResolvedValue,
     UserId,
 };
@@ -20,15 +20,14 @@ use crate::{db::Db, Config};
 
 pub struct Handler {
     config: Arc<Config>,
-    db: Db,
+    db: Arc<Db>,
 }
 
 impl Handler {
     pub async fn new(config: Arc<Config>) -> anyhow::Result<Self> {
-        Ok(Self {
-            db: Db::new(config.clone()).await?,
-            config,
-        })
+        let db = Db::new(config.clone()).await?.into();
+
+        Ok(Self { db, config })
     }
 }
 
@@ -51,6 +50,32 @@ impl EventHandler for Handler {
         if ChannelType::Voice != channel.kind {
             eprintln!("Specified channel is not vc!");
             return;
+        }
+
+        let mut previous_participants: Vec<_> = self.db.lookup_saved_participants().await.unwrap();
+        let mut current_participants: Vec<_> = channel
+            .members(ctx.cache.clone())
+            .unwrap()
+            .into_iter()
+            .map(|member| member.user.id.get().to_string())
+            .collect();
+
+        previous_participants.retain(|p| {
+            let index = current_participants.iter().position(|c| p.eq(c));
+            if let Some(index) = index {
+                current_participants.remove(index);
+                false
+            } else {
+                true
+            }
+        });
+
+        for previous in previous_participants {
+            self.db.leaves(previous)
+        }
+
+        for current in current_participants {
+            self.db.joins(current);
         }
 
         channel
@@ -148,7 +173,7 @@ impl EventHandler for Handler {
             .unwrap();
     }
 
-    async fn voice_state_update(&self, _: Context, old: Option<VoiceState>, new: VoiceState) {
+    async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
         let user_id = new.user_id.get();
         let was_in_vc = old
             .and_then(|v| v.channel_id)
@@ -160,17 +185,28 @@ impl EventHandler for Handler {
             .unwrap_or(false);
 
         if !was_in_vc && now_in_vc {
-            Db::joins(user_id).await.unwrap();
+            self.db.joins(user_id.to_string()).await.unwrap();
         }
 
         if was_in_vc && !now_in_vc {
-            Db::leaves(user_id).await.unwrap();
+            self.db.leaves(user_id).await.unwrap();
+            if !self.db.participated_today(user_id) {
+                ctx.http.send_message(
+                    ChannelId::new(self.config.vc_id.get()),
+                    vec![],
+                    format!(
+                        "<@{}>님께서 오늘 모각코 출석 미션을 달성하셨습니다!⭐",
+                        user_id
+                    ),
+                )
+            }
         }
     }
 }
 
 pub struct Bot {
     pub client: Client,
+    pub db: Arc<Db>,
 }
 
 impl Bot {
@@ -178,6 +214,7 @@ impl Bot {
         let config = Arc::new(config);
 
         let handler = Handler::new(config.clone()).await?;
+        let db = handler.db.clone();
 
         let client = Client::builder(
             &config.token,
@@ -190,7 +227,7 @@ impl Bot {
         .event_handler(handler)
         .await?;
 
-        Ok(Self { client })
+        Ok(Self { client, db })
     }
 
     pub async fn start(&mut self) -> serenity::Result<()> {
