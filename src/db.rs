@@ -68,13 +68,15 @@ impl Db {
             return Ok(false);
         };
 
+        let is_first_time_today = self.is_first_time_today(user).await?;
+
         let user = user.to_string();
 
         sqlx::query!(r#"insert into vc_activities (user) values (?)"#, user)
             .execute(&self.pool)
             .await?;
 
-        Ok(())
+        Ok(is_first_time_today)
     }
 
     /// Invoked when user leaves the voice channel
@@ -86,15 +88,16 @@ impl Db {
             return Ok(false);
         };
 
+        let is_first_time_today = self.is_first_time_today(user).await?;
+
         sqlx::query!(
-            r#"update vc_activities set left = ? where id = ?"#,
-            now_str,
+            r#"update vc_activities set left = datetime('now') where id = ?"#,
             id
         )
         .execute(&self.pool)
         .await?;
 
-        Ok(count == 0)
+        Ok(is_first_time_today)
     }
 
     pub async fn lookup_saved_participants(&self) -> anyhow::Result<Vec<User>> {
