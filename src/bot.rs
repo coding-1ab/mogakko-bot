@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::sync::Arc;
 
 use serenity::all::{
-    CommandOptionType, CommandType, CreateCommand, CreateCommandOption, CreateEmbed,
+    ChannelId, CommandOptionType, CommandType, CreateCommand, CreateCommandOption, CreateEmbed,
     CreateEmbedAuthor, CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage,
     Interaction, ResolvedValue, UserId,
 };
@@ -160,31 +160,37 @@ impl EventHandler for Handler {
             .unwrap_or(false);
 
         if !was_in_vc && now_in_vc {
-            self.db.joins(user_id).await.unwrap();
-            /*if !self.db.participated_today(user_id) {
-                ctx.http.send_message(
-                    ChannelId::new(self.config.vc_id.get()),
-                    vec![],
-                    format!(
-                        "<@{}>님께서 오늘 모각코 출석 미션을 달성하셨습니다!⭐",
-                        user_id
-                    ),
-                )
-            }*/
+            let send_message = self.db.joins(user_id).await.unwrap();
+            if send_message {
+                ctx.http
+                    .send_message(
+                        ChannelId::new(self.config.vc_id.get()),
+                        vec![],
+                        &format!(
+                            "<@{}>님께서 오늘 모각코 출석 미션을 달성하셨습니다!⭐",
+                            user_id
+                        ),
+                    )
+                    .await
+                    .unwrap();
+            }
         }
 
         if was_in_vc && !now_in_vc {
-            self.db.leaves(user_id).await.unwrap();
-            /*if !self.db.participated_today(user_id) {
-                ctx.http.send_message(
-                    ChannelId::new(self.config.vc_id.get()),
-                    vec![],
-                    format!(
-                        "<@{}>님께서 오늘 모각코 출석 미션을 달성하셨습니다!⭐",
-                        user_id
-                    ),
-                )
-            }*/
+            let send_message = self.db.leaves(user_id).await.unwrap();
+            if send_message {
+                ctx.http
+                    .send_message(
+                        ChannelId::new(self.config.vc_id.get()),
+                        vec![],
+                        &format!(
+                            "<@{}>님께서 오늘 모각코 출석 미션을 달성하셨습니다!⭐",
+                            user_id
+                        ),
+                    )
+                    .await
+                    .unwrap();
+            }
         }
     }
 
