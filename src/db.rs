@@ -65,7 +65,7 @@ impl Db {
 
         let user = user.to_string();
 
-        sqlx::query!(r#"insert into vc_activities (user) values (?)"#, user)
+        sqlx::query_file!("src/queries/join.sql", user)
             .execute(&self.pool)
             .await?;
 
