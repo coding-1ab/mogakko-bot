@@ -221,7 +221,7 @@ impl EventHandler for Handler {
                             })
                     })
                     .unwrap_or(interaction.user.id.get());
-                Bot::statistics(ctx.http.clone(), id).await
+                Bot::statistics(self.db.clone(), ctx.http.clone(), id).await
             }
             _ => return,
         };
@@ -473,8 +473,12 @@ impl Bot {
             .content(line)
     }
 
-    pub async fn statistics(client: Arc<Http>, target: u64) -> CreateInteractionResponseMessage {
-        let statistics = Db::user_statistics(target).await.unwrap();
+    pub async fn statistics(
+        db: Arc<Db>,
+        client: Arc<Http>,
+        target: u64,
+    ) -> CreateInteractionResponseMessage {
+        let statistics = db.user_statistics(target).await.unwrap();
 
         let now = now_kst().date();
 
