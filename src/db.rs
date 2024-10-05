@@ -17,6 +17,7 @@ pub struct LeaderboardRecord {
 }
 
 pub struct UserStatistics {
+    pub rank: u32,
     pub user: User,
     pub days: u32,
     pub total_duration: Duration,
