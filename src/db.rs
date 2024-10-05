@@ -1,7 +1,7 @@
 use std::{sync::Arc, u32};
 
 use sqlx::{Pool, Sqlite};
-use time::{Date, Duration};
+use time::{format_description::well_known::Rfc3339, Date, Duration};
 
 use crate::Config;
 
@@ -118,16 +118,15 @@ impl Db {
             .fetch_all(&self.pool)
             .await?;
 
-        todo!()
-
-        // Ok(
-        //     st.map(|st| UserStatistics {
-        //         rank: st.rank,
-        //         user: st.user,
-        //         days: calendar.len(),
-        //         total_duration: st.total_duration,
-        //         calendar: calendar.iter_mut().map(|r| r.days)
-        //     })
-        // )
+        Ok(st.map(|st| UserStatistics {
+            rank: st.rank as u32,
+            user: st.user.parse().unwrap(),
+            days: calendar.len() as u32,
+            total_duration: Duration::seconds(st.total_duration),
+            calendar: calendar
+                .into_iter()
+                .map(|r| Date::parse(&r.date.unwrap(), &Rfc3339).unwrap())
+                .collect(),
+        }))
     }
 }

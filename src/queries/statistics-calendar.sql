@@ -1,5 +1,5 @@
 select distinct
-	date(`joined`, '+09:00') as `days`
+	date(`joined`, '+09:00') as `date`
 from
 	`vc_activities`
 where
