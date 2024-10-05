@@ -3,10 +3,7 @@ use std::{sync::Arc, u32};
 use sqlx::{Pool, Sqlite};
 use time::{format_description::well_known::Rfc3339, Date, Duration};
 
-use crate::{
-    utils::{is_valid_time, now_kst},
-    Config,
-};
+use crate::Config;
 
 type User = u64;
 
@@ -50,9 +47,8 @@ impl Db {
 
     async fn is_first_time_today(&self, user: User) -> anyhow::Result<bool> {
         let user = user.to_string();
-        let today = now_kst().date().format(&Rfc3339)?;
 
-        let count = sqlx::query_file!(r#"src/queries/is_first_time_today.sql"#, user, today)
+        let count = sqlx::query_file!(r#"src/queries/is_first_time_today.sql"#, user)
             .fetch_one(&self.pool)
             .await?;
 
