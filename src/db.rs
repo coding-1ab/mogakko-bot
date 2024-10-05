@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
 use sqlx::{Pool, Sqlite};
-use time::{Date, Duration, Month};
+use time::{Date, Duration, OffsetDateTime, UtcOffset, Month};
 
-use crate::Config;
+use crate::{
+    utils::{is_valid_time, now_kst},
+    Config,
+};
 
 pub struct LeaderboardRecord {
     pub user: u64,
@@ -33,13 +36,21 @@ impl Db {
     }
 
     // when user joins
-    pub async fn joins(user: u64) -> anyhow::Result<()> {
-        println!("user {} joined!", user);
+    pub async fn joins(&self, user: String) -> anyhow::Result<()> {
+        if !is_valid_time(now_kst()) {
+            return Ok(());
+        }
+
+        sqlx::query(r#"insert into vc_activities (user) values (?)"#)
+            .bind(user)
+            .execute(&self.pool)
+            .await?;
+
         Ok(())
     }
 
     // when user leaves
-    pub async fn leaves(user: u64) -> anyhow::Result<()> {
+    pub async fn leaves(user: String) -> anyhow::Result<()> {
         println!("user {} left!", user);
         Ok(())
     }
