@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use serenity::{all::VoiceState, async_trait, prelude::*};
+use serenity::{
+    all::{Channel, ChannelType, Ready, VoiceState},
+    async_trait,
+    prelude::*,
+};
 
 use crate::{db::Db, Config};
 
