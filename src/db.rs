@@ -1,7 +1,8 @@
 use std::error::Error;
-use std::fmt::{Debug, Display, Formatter, Write};
+use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
-use time::{Date, Duration, PrimitiveDateTime};
+
+use time::{Date, Duration};
 
 use crate::Config;
 
@@ -20,7 +21,14 @@ pub struct UserStatistics {
 pub struct VcEvent {
     id: u64,
     at: u64,
-    is_join: bool,
+    event_kind: VcEventKind,
+}
+
+#[repr(u64)]
+pub enum VcEventKind {
+    Join = 0,
+    Leave,
+    Detected
 }
 
 pub struct TerminationEvent {
@@ -34,7 +42,7 @@ pub struct Db {
 pub enum VcDBError {
     InvalidId,
     InvalidAt,
-    InvalidBool
+    InvalidKind,
 }
 
 impl VcEvent {
@@ -47,27 +55,24 @@ impl VcEvent {
             return Err(VcDBError::InvalidAt);
         }
 
-        let is_join = if value3 == 1 {
-            true
-        } else if value3 == 0 {
-            false
-        } else {
-            return Err(VcDBError::InvalidBool);
+        let event_kind = match value3 {
+            0 => VcEventKind::Join,
+            1 => VcEventKind::Leave,
+            2 => VcEventKind::Detected,
+            _ => return Err(VcDBError::InvalidKind)
         };
 
         Ok(Self {
             id: value1,
             at: value2,
-            is_join,
+            event_kind,
         })
     }
 }
 
 impl TerminationEvent {
     pub fn from_db(value3: u8) -> Self {
-        Self {
-            exit_code: value3,
-        }
+        Self { exit_code: value3 }
     }
 }
 
@@ -78,12 +83,19 @@ impl Db {
 
     // when user joins
     pub async fn joins(user: u64) -> anyhow::Result<()> {
-        todo!()
+        println!("user {} joined!", user);
+        Ok(())
     }
 
     // when user leaves
-    pub async fn leaves(user: u64, when: PrimitiveDateTime) -> anyhow::Result<()> {
-        todo!()
+    pub async fn leaves(user: u64) -> anyhow::Result<()> {
+        println!("user {} left!", user);
+        Ok(())
+    }
+
+    pub async fn detected(user: u64) -> anyhow::Result<()> {
+        println!("user {} is already in vc!", user);
+        Ok(())
     }
 
     // get server leaderboard
@@ -106,7 +118,7 @@ impl Debug for VcDBError {
         let message = match self {
             VcDBError::InvalidId => "Invalid User Id.",
             VcDBError::InvalidAt => "Invalid Timestamp.",
-            VcDBError::InvalidBool => "Invalid boolean value."
+            VcDBError::InvalidKind => "Invalid Event Kind.",
         };
         f.write_str(message)
     }
