@@ -4,9 +4,9 @@ use std::sync::Arc;
 use chrono::FixedOffset;
 use log::{error, trace};
 use serenity::all::{
-    ActivityData, ActivityType, ChannelId, CommandOptionType, CommandType, CreateCommand,
-    CreateCommandOption, CreateEmbed, CreateEmbedAuthor, CreateInteractionResponse,
-    CreateInteractionResponseMessage, CreateMessage, Interaction, ResolvedValue, UserId,
+    ChannelId, CommandOptionType, CommandType, CreateCommand, CreateCommandOption, CreateEmbed,
+    CreateEmbedAuthor, CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage,
+    Interaction, ResolvedValue, UserId,
 };
 use serenity::builder::CreateEmbedFooter;
 use serenity::http::Http;
@@ -20,7 +20,7 @@ use tokio::task::JoinSet;
 use tokio_cron::{daily, Job, Scheduler};
 
 use crate::db::{LeaderboardRecord, UserStatistics};
-use crate::utils::{is_valid_time, now_kst};
+use crate::utils::{change_status, is_valid_time, now_kst, pretty_duration};
 use crate::{db::Db, Config};
 
 const BOT_COLOR: (u8, u8, u8) = (37, 150, 190);
@@ -71,6 +71,7 @@ impl EventHandler for Handler {
         } else {
             vec![]
         };
+        let users = current_participants.len();
 
         previous_participants.retain(|p| {
             let index = current_participants.iter().position(|c| p.eq(c));
@@ -147,12 +148,7 @@ impl EventHandler for Handler {
             .await
             .expect("Unable to create statistics user command!");
 
-        ctx.set_activity(Some(ActivityData {
-            name: "Mogakko".to_owned(),
-            kind: ActivityType::Custom,
-            state: Some("모각코 이벤트 진행 중...".to_owned()),
-            url: None,
-        }));
+        change_status(&ctx, users);
     }
 
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
@@ -172,6 +168,10 @@ impl EventHandler for Handler {
 
         if !was_in_vc && now_in_vc {
             let send_message = self.db.joins(user_id).await.unwrap();
+            change_status(
+                &ctx,
+                self.db.lookup_saved_participants().await.unwrap().len(),
+            );
             if send_message {
                 ctx.http
                     .send_message(
@@ -189,6 +189,10 @@ impl EventHandler for Handler {
 
         if was_in_vc && !now_in_vc {
             let send_message = self.db.leaves(user_id).await.unwrap();
+            change_status(
+                &ctx,
+                self.db.lookup_saved_participants().await.unwrap().len(),
+            );
             if send_message {
                 ctx.http
                     .send_message(
@@ -434,7 +438,7 @@ impl Bot {
                 title.push_str("     👑");
             }
 
-            let duration_message = Self::pretty_duration(record.total_duration);
+            let duration_message = pretty_duration(record.total_duration);
 
             let mut embed = CreateEmbed::new()
                 .title(title)
@@ -573,38 +577,10 @@ impl Bot {
             .field("참여 일수", statistics.days.to_string(), true)
             .field(
                 "총 개발 시간",
-                Self::pretty_duration(statistics.total_duration),
+                pretty_duration(statistics.total_duration),
                 true,
             );
 
         CreateInteractionResponseMessage::new().embed(embed)
-    }
-
-    fn pretty_duration(duration: Duration) -> String {
-        let days = duration.whole_days();
-        let hours = duration.whole_hours() % 24;
-        let minutes = duration.whole_minutes() % 60;
-
-        let mut duration_message = String::new();
-        if days != 0 {
-            duration_message.push_str(&days.to_string());
-            duration_message.push_str("일 ")
-        }
-
-        if hours != 0 {
-            duration_message.push_str(&hours.to_string());
-            duration_message.push_str("시간 ");
-        }
-
-        if minutes != 0 {
-            duration_message.push_str(&minutes.to_string());
-            duration_message.push_str("분 ");
-        }
-
-        if duration_message.is_empty() {
-            duration_message.push_str("0분")
-        }
-
-        duration_message
     }
 }
