@@ -22,6 +22,7 @@ pub struct UserStatistics {
 }
 
 pub struct Db {
+    #[allow(dead_code)]
     config: Arc<Config>,
     pool: Pool<Sqlite>,
 }
