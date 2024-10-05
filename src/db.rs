@@ -60,19 +60,35 @@ impl Db {
         Ok(())
     }
 
-    // when user leaves
-    pub async fn leaves(&self, user: String) -> anyhow::Result<()> {
+    /// Invoked when user leaves the voice channel
+    ///
+    /// Returns `true` if it is the first time the user left the voice channel today.
+    /// Otherwise, returns `false`.
+    pub async fn leaves(&self, user: String) -> anyhow::Result<bool> {
         let Some(id) = self.find_lock(&user).await? else {
-            return Ok(());
+            return Ok(false);
         };
 
-        let now = now_kst().format(&Rfc3339)?;
+        let now = now_kst();
+        let today = now.date().format(&Rfc3339)?;
 
-        sqlx::query!(r#"update vc_activities set left = ? where id = ?"#, now, id)
-            .execute(&self.pool)
+        let count = sqlx::query!(r#"select count(*) as count from vc_activities where date(joined, '+09:00') = ? and left is not null"#, today)
+            .fetch_one(&self.pool)
             .await?;
 
-        Ok(())
+        let count = count.count;
+
+        let now_str = now.format(&Rfc3339)?;
+
+        sqlx::query!(
+            r#"update vc_activities set left = ? where id = ?"#,
+            now_str,
+            id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(count == 0)
     }
 
     pub async fn lookup_saved_participants(&self) -> anyhow::Result<Vec<String>> {
