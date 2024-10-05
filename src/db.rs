@@ -1,7 +1,7 @@
 use std::{sync::Arc, u32};
 
 use sqlx::{Pool, Sqlite};
-use time::{format_description::well_known::Rfc3339, Date, Duration};
+use time::{Date, Duration};
 
 use crate::Config;
 
