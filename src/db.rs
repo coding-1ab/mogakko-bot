@@ -91,8 +91,14 @@ impl Db {
     }
 
     pub async fn lookup_saved_participants(&self) -> anyhow::Result<Vec<User>> {
-        // todo!()
-        Ok(vec![])
+        let users = sqlx::query_file!("src/queries/lookup.sql")
+            .fetch_all(&self.pool)
+            .await?;
+
+        Ok(users
+            .into_iter()
+            .map(|user| user.user.parse())
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
     // get server leaderboard
