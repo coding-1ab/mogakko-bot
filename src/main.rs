@@ -4,15 +4,15 @@ use std::env;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	dotenv()?;
+    dotenv()?;
 
-	let config = Config {
-		token: env::var("DISCORD_TOKEN")?,
-	};
+    let config = Config {
+        token: env::var("DISCORD_TOKEN")?.into_boxed_str(),
+    };
 
-	let mut bot = Bot::new(config).await?;
+    let mut bot = Bot::new(config).await?;
 
-	bot.start().await?;
+    bot.start().await?;
 
-	Ok(())
+    Ok(())
 }

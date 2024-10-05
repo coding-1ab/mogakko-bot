@@ -1,3 +1,3 @@
 pub struct Config {
-	pub token: String,
+    pub token: Box<str>,
 }
