@@ -55,7 +55,7 @@ impl Db {
         let user = user.to_string();
         let today = now_kst().date().format(&Rfc3339)?;
 
-        let count = sqlx::query!(r#"select count(*) as count from vc_activities where user = ? and date(joined, '+09:00') = ? and left is not null"#, user, today)
+        let count = sqlx::query_file!(r#"src/queries/is_first_time_today.sql"#, user, today)
             .fetch_one(&self.pool)
             .await?;
 
