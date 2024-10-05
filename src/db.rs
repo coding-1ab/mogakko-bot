@@ -41,12 +41,9 @@ impl Db {
     async fn find_lock(&self, user: User) -> anyhow::Result<Option<i64>> {
         let user = user.to_string();
 
-        let lock = sqlx::query!(
-            r#"select id from vc_activities where user = ? and left is null"#,
-            user
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        let lock = sqlx::query_file!("src/queries/find_lock.sql", user)
+            .fetch_optional(&self.pool)
+            .await?;
 
         Ok(lock.map(|r| r.id))
     }
