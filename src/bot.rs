@@ -4,9 +4,9 @@ use std::sync::Arc;
 use chrono::FixedOffset;
 use log::{error, trace};
 use serenity::all::{
-    ChannelId, CommandOptionType, CommandType, CreateCommand, CreateCommandOption, CreateEmbed,
-    CreateEmbedAuthor, CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage,
-    Interaction, ResolvedValue, UserId,
+    ActivityData, ActivityType, ChannelId, CommandOptionType, CommandType, CreateCommand,
+    CreateCommandOption, CreateEmbed, CreateEmbedAuthor, CreateInteractionResponse,
+    CreateInteractionResponseMessage, CreateMessage, Interaction, ResolvedValue, UserId,
 };
 use serenity::builder::CreateEmbedFooter;
 use serenity::http::Http;
@@ -146,6 +146,15 @@ impl EventHandler for Handler {
             )
             .await
             .expect("Unable to create statistics user command!");
+
+        ctx.set_activity(Some(ActivityData {
+            name: "Mogakko".to_owned(),
+            kind: ActivityType::Custom,
+            state: Some("모각코 이벤트 진행 중...".to_owned()),
+            url: None,
+        }));
+
+        println!("Bot is ready!");
     }
 
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
