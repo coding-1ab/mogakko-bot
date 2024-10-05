@@ -2,9 +2,9 @@ use std::cmp::Ordering;
 use std::sync::Arc;
 
 use serenity::all::{
-    ChannelId, CommandOptionType, CommandType, CreateCommand, CreateCommandOption, CreateEmbed,
-    CreateInteractionResponse, CreateInteractionResponseMessage, Interaction, ResolvedValue,
-    UserId,
+    CommandOptionType, CommandType, CreateCommand, CreateCommandOption, CreateEmbed,
+    CreateEmbedAuthor, CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage,
+    Interaction, ResolvedValue, UserId,
 };
 use serenity::builder::CreateEmbedFooter;
 use serenity::http::Http;
@@ -13,10 +13,15 @@ use serenity::{
     async_trait,
     prelude::*,
 };
-use time::{Date, Duration, Month, OffsetDateTime, Weekday};
+use time::{Date, Duration, Month, Weekday};
+use tokio::task::JoinSet;
+use tokio_cron::{daily, Job, Scheduler};
 
 use crate::db::LeaderboardRecord;
+use crate::utils::{is_valid_time, now_kst};
 use crate::{db::Db, Config};
+
+const BOT_COLOR: (u8, u8, u8) = (37, 150, 190);
 
 pub struct Handler {
     config: Arc<Config>,
@@ -53,12 +58,17 @@ impl EventHandler for Handler {
         }
 
         let mut previous_participants: Vec<_> = self.db.lookup_saved_participants().await.unwrap();
-        let mut current_participants: Vec<_> = channel
-            .members(ctx.cache.clone())
-            .unwrap()
-            .into_iter()
-            .map(|member| member.user.id.get().to_string())
-            .collect();
+
+        let mut current_participants: Vec<_> = if is_valid_time(now_kst()) {
+            channel
+                .members(ctx.cache.clone())
+                .unwrap()
+                .into_iter()
+                .map(|member| member.user.id.get())
+                .collect()
+        } else {
+            vec![]
+        };
 
         previous_participants.retain(|p| {
             let index = current_participants.iter().position(|c| p.eq(c));
@@ -71,11 +81,11 @@ impl EventHandler for Handler {
         });
 
         for previous in previous_participants {
-            self.db.leaves(previous)
+            self.db.leaves(previous).await.unwrap();
         }
 
         for current in current_participants {
-            self.db.joins(current);
+            self.db.joins(current).await.unwrap();
         }
 
         channel
@@ -107,7 +117,7 @@ impl EventHandler for Handler {
             .create_command(
                 ctx.http.clone(),
                 CreateCommand::new("statistic")
-                    .name_localized("ko", "참여통계")
+                    .name_localized("ko", "기록")
                     .description("지정된 유저, 또는 자기 자신의 모각코 이벤트 참여 통계 표시")
                     .add_option(
                         CreateCommandOption::new(
@@ -127,11 +137,55 @@ impl EventHandler for Handler {
             .create_command(
                 ctx.http.clone(),
                 CreateCommand::new("statistic")
-                    .name_localized("ko", "참여통계")
+                    .name_localized("ko", "기록 보기")
                     .kind(CommandType::User),
             )
             .await
             .expect("Unable to create statistics user command!");
+    }
+
+    async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
+        if !is_valid_time(now_kst()) {
+            return;
+        }
+
+        let user_id = new.user_id.get();
+        let was_in_vc = old
+            .and_then(|v| v.channel_id)
+            .map(|v| v.get() == self.config.vc_id.get())
+            .unwrap_or(false);
+        let now_in_vc = new
+            .channel_id
+            .map(|v| v.get() == self.config.vc_id.get())
+            .unwrap_or(false);
+
+        if !was_in_vc && now_in_vc {
+            self.db.joins(user_id).await.unwrap();
+            /*if !self.db.participated_today(user_id) {
+                ctx.http.send_message(
+                    ChannelId::new(self.config.vc_id.get()),
+                    vec![],
+                    format!(
+                        "<@{}>님께서 오늘 모각코 출석 미션을 달성하셨습니다!⭐",
+                        user_id
+                    ),
+                )
+            }*/
+        }
+
+        if was_in_vc && !now_in_vc {
+            self.db.leaves(user_id).await.unwrap();
+            /*if !self.db.participated_today(user_id) {
+                ctx.http.send_message(
+                    ChannelId::new(self.config.vc_id.get()),
+                    vec![],
+                    format!(
+                        "<@{}>님께서 오늘 모각코 출석 미션을 달성하셨습니다!⭐",
+                        user_id
+                    ),
+                )
+            }*/
+        }
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
@@ -172,41 +226,12 @@ impl EventHandler for Handler {
             .await
             .unwrap();
     }
-
-    async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
-        let user_id = new.user_id.get();
-        let was_in_vc = old
-            .and_then(|v| v.channel_id)
-            .map(|v| v.get() == self.config.vc_id.get())
-            .unwrap_or(false);
-        let now_in_vc = new
-            .channel_id
-            .map(|v| v.get() == self.config.vc_id.get())
-            .unwrap_or(false);
-
-        if !was_in_vc && now_in_vc {
-            self.db.joins(user_id.to_string()).await.unwrap();
-        }
-
-        if was_in_vc && !now_in_vc {
-            self.db.leaves(user_id).await.unwrap();
-            if !self.db.participated_today(user_id) {
-                ctx.http.send_message(
-                    ChannelId::new(self.config.vc_id.get()),
-                    vec![],
-                    format!(
-                        "<@{}>님께서 오늘 모각코 출석 미션을 달성하셨습니다!⭐",
-                        user_id
-                    ),
-                )
-            }
-        }
-    }
 }
 
 pub struct Bot {
     pub client: Client,
     pub db: Arc<Db>,
+    pub scheduler: Scheduler,
 }
 
 impl Bot {
@@ -227,7 +252,126 @@ impl Bot {
         .event_handler(handler)
         .await?;
 
-        Ok(Self { client, db })
+        let vc_id = config.vc_id;
+        let announcement_id = config.announcement_id;
+        let db1 = db.clone();
+        let db2 = db.clone();
+        let http1 = client.http.clone();
+        let http2 = client.http.clone();
+        let cache1 = client.cache.clone();
+        let cache2 = client.cache.clone();
+
+        let mut scheduler = Scheduler::utc();
+        scheduler.add(Job::named("six", daily("18"), move || {
+            let db = db1.clone();
+            let http = http1.clone();
+            let cache = cache1.clone();
+            async move {
+                println!("Resetting at 6PM");
+
+                let mut set = JoinSet::new();
+                let members = http
+                    .get_channel(vc_id.into())
+                    .await
+                    .unwrap()
+                    .guild()
+                    .unwrap()
+                    .members(cache)
+                    .unwrap();
+
+                let ids: Vec<_> = members.iter().map(|v| v.user.id.get()).collect();
+                for member in members {
+                    let db = db.clone();
+                    set.spawn(async move {
+                        let id = member.user.id.get();
+                        println!("Injecting {}", id);
+                        db.joins(id).await
+                    });
+                }
+
+                let Channel::Guild(channel) =
+                    http.get_channel(announcement_id.into()).await.unwrap()
+                else {
+                    unreachable!()
+                };
+
+                let date = now_kst().date();
+
+                let participants = ids
+                    .into_iter()
+                    .map(|v| format!("<@{v}>"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let embed = CreateEmbed::new()
+                    .author(CreateEmbedAuthor::new("모각코 알림"))
+                    .title(format!(
+                        "{}월 {}일자 모각코 이벤트 시작! 👋",
+                        date.month() as u8,
+                        date.day()
+                    ))
+                    .field("참여자 목록", participants, true);
+                channel
+                    .send_message(http, CreateMessage::new().embed(embed))
+                    .await
+                    .unwrap();
+
+                set.join_all().await.into_iter().for_each(|v| v.unwrap());
+            }
+        }));
+
+        scheduler.add(Job::named("ten", daily("22"), move || {
+            let db = db2.clone();
+            let http = http2.clone();
+            let cache = cache2.clone();
+            async move {
+                println!("Resetting at 10PM");
+
+                let mut set = JoinSet::new();
+                let members = http
+                    .get_channel(vc_id.into())
+                    .await
+                    .unwrap()
+                    .guild()
+                    .unwrap()
+                    .members(cache)
+                    .unwrap();
+
+                for member in members {
+                    let db = db.clone();
+                    set.spawn(async move {
+                        let id = member.user.id.get();
+                        println!("Removing {}", id);
+                        db.leaves(id).await.unwrap()
+                    });
+                }
+
+                let date = now_kst().date();
+                let Channel::Guild(channel) =
+                    http.get_channel(announcement_id.into()).await.unwrap()
+                else {
+                    unreachable!()
+                };
+                let embed = CreateEmbed::new()
+                    .author(CreateEmbedAuthor::new("모각코 알림"))
+                    .title(format!(
+                        "{}월 {}일자 모각코 이벤트 종료! 👋",
+                        date.month() as u8,
+                        date.day()
+                    ))
+                    .description("모두 수고하셨습니다!");
+                channel
+                    .send_message(http, CreateMessage::new().embed(embed))
+                    .await
+                    .unwrap();
+                set.join_all().await;
+            }
+        }));
+
+        Ok(Self {
+            client,
+            db,
+            scheduler,
+        })
     }
 
     pub async fn start(&mut self) -> serenity::Result<()> {
@@ -268,7 +412,7 @@ impl Bot {
                 0 => (243, 250, 117),
                 1 => (219, 219, 219),
                 2 => (135, 62, 35),
-                _ => (37, 150, 190),
+                _ => BOT_COLOR,
             };
 
             let mut title = format!(":{}:등", place);
@@ -299,9 +443,7 @@ impl Bot {
             embeds.push(embed);
         }
 
-        let message = CreateInteractionResponseMessage::new()
-            .add_embeds(embeds)
-            .ephemeral(true);
+        let message = CreateInteractionResponseMessage::new().add_embeds(embeds);
 
         message
     }
@@ -331,7 +473,7 @@ impl Bot {
     pub async fn statistics(client: Arc<Http>, target: u64) -> CreateInteractionResponseMessage {
         let statistics = Db::user_statistics(target).await.unwrap();
 
-        let now = OffsetDateTime::now_utc().date();
+        let now = now_kst().date();
 
         let start = Date::from_calendar_date(now.year(), now.month(), 1).unwrap();
         let end = if let Month::December = now.month() {
@@ -403,9 +545,7 @@ impl Bot {
             .thumbnail(user.avatar_url().unwrap_or(user.default_avatar_url()))
             .description(description);
 
-        CreateInteractionResponseMessage::new()
-            .ephemeral(true)
-            .embed(embed)
+        CreateInteractionResponseMessage::new().embed(embed)
     }
 
     fn pretty_duration(duration: Duration) -> String {
