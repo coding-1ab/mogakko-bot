@@ -13,7 +13,8 @@ pub struct LeaderboardRecord {
 pub struct UserStatistics {
     pub user: u64,
     pub days: u32,
-    pub calendar: Vec<(Date, Duration)>,
+    pub total_duration: Duration,
+    pub calendar: Vec<Date>,
 }
 
 pub struct Db {
