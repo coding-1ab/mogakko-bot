@@ -194,8 +194,8 @@ impl EventHandler for Handler {
         };
 
         let contents = match interaction.data.name.as_str() {
-            "leaderboard" => Bot::leaderboard(ctx.http.clone()).await,
-            "table" => Bot::table().await,
+            "leaderboard" => Bot::leaderboard(self.db.clone(), ctx.http.clone()).await,
+            "table" => Bot::table(self.db.clone()).await,
             "statistic" => {
                 let id = interaction
                     .data
@@ -253,7 +253,6 @@ impl Bot {
         .await?;
 
         let vc_id = config.vc_id;
-        let announcement_id = config.announcement_id;
         let db1 = db.clone();
         let db2 = db.clone();
         let http1 = client.http.clone();
@@ -289,9 +288,7 @@ impl Bot {
                     });
                 }
 
-                let Channel::Guild(channel) =
-                    http.get_channel(announcement_id.into()).await.unwrap()
-                else {
+                let Channel::Guild(channel) = http.get_channel(vc_id.into()).await.unwrap() else {
                     unreachable!()
                 };
 
@@ -315,7 +312,9 @@ impl Bot {
                     .await
                     .unwrap();
 
-                set.join_all().await.into_iter().for_each(|v| v.unwrap());
+                set.join_all().await.into_iter().for_each(|v| {
+                    v.unwrap();
+                });
             }
         }));
 
@@ -346,9 +345,7 @@ impl Bot {
                 }
 
                 let date = now_kst().date();
-                let Channel::Guild(channel) =
-                    http.get_channel(announcement_id.into()).await.unwrap()
-                else {
+                let Channel::Guild(channel) = http.get_channel(vc_id.into()).await.unwrap() else {
                     unreachable!()
                 };
                 let embed = CreateEmbed::new()
@@ -378,8 +375,8 @@ impl Bot {
         self.client.start().await
     }
 
-    pub async fn leaderboard(client: Arc<Http>) -> CreateInteractionResponseMessage {
-        let mut leaderboard: Vec<LeaderboardRecord> = Db::leaderboard().await.unwrap();
+    pub async fn leaderboard(db: Arc<Db>, client: Arc<Http>) -> CreateInteractionResponseMessage {
+        let mut leaderboard: Vec<LeaderboardRecord> = db.leaderboard().await.unwrap();
 
         leaderboard.sort_unstable_by(|a, b| {
             let cmp1 = b.days.cmp(&a.days);
@@ -448,8 +445,8 @@ impl Bot {
         message
     }
 
-    pub async fn table() -> CreateInteractionResponseMessage {
-        let mut leaderboard = Db::leaderboard().await.unwrap();
+    pub async fn table(db: Arc<Db>) -> CreateInteractionResponseMessage {
+        let mut leaderboard = db.leaderboard().await.unwrap();
         leaderboard.sort_unstable_by(|a, b| {
             let cmp1 = b.days.cmp(&a.days);
 
