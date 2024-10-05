@@ -1,8 +1,7 @@
-use std::num::NonZeroU32;
-use std::{sync::Arc, u32};
+use std::sync::Arc;
 
 use sqlx::{Pool, Sqlite};
-use time::{format_description::well_known::Rfc3339, Date, Duration};
+use time::{format_description::well_known::Iso8601, Date, Duration};
 
 use crate::Config;
 
@@ -127,7 +126,7 @@ impl Db {
             total_duration: Duration::seconds(st.total_duration),
             calendar: calendar
                 .into_iter()
-                .map(|r| Date::parse(&r.date.unwrap(), &Rfc3339).unwrap())
+                .map(|r| Date::parse(&r.date.unwrap(), &Iso8601::DATE).unwrap())
                 .collect(),
         }))
     }
