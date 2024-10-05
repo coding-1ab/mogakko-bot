@@ -51,11 +51,22 @@ impl Db {
         Ok(lock.map(|r| r.id))
     }
 
+    async fn is_first_time_today(&self, user: User) -> anyhow::Result<bool> {
+        let user = user.to_string();
+        let today = now_kst().date().format(&Rfc3339)?;
+
+        let count = sqlx::query!(r#"select count(*) as count from vc_activities where user = ? and date(joined, '+09:00') = ? and left is not null"#, user, today)
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(count.count == 0)
+    }
+
     // when user joins
-    pub async fn joins(&self, user: User) -> anyhow::Result<()> {
-        if !is_valid_time(now_kst()) {
-            return Ok(());
-        }
+    pub async fn joins(&self, user: User) -> anyhow::Result<bool> {
+        let None = self.find_lock(user).await? else {
+            return Ok(false);
+        };
 
         let user = user.to_string();
 
@@ -74,17 +85,6 @@ impl Db {
         let Some(id) = self.find_lock(user).await? else {
             return Ok(false);
         };
-
-        let now = now_kst();
-        let today = now.date().format(&Rfc3339)?;
-
-        let count = sqlx::query!(r#"select count(*) as count from vc_activities where date(joined, '+09:00') = ? and left is not null"#, today)
-            .fetch_one(&self.pool)
-            .await?;
-
-        let count = count.count;
-
-        let now_str = now.format(&Rfc3339)?;
 
         sqlx::query!(
             r#"update vc_activities set left = ? where id = ?"#,
