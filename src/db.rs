@@ -38,7 +38,7 @@ impl Db {
     async fn find_lock(&self, user: User) -> anyhow::Result<Option<i64>> {
         let user = user.to_string();
 
-        let lock = sqlx::query_file!("src/queries/find_lock.sql", user)
+        let lock = sqlx::query_file!("src/queries/find-lock.sql", user)
             .fetch_optional(&self.pool)
             .await?;
 
@@ -48,7 +48,7 @@ impl Db {
     async fn is_first_time_today(&self, user: User) -> anyhow::Result<bool> {
         let user = user.to_string();
 
-        let count = sqlx::query_file!(r#"src/queries/is_first_time_today.sql"#, user)
+        let count = sqlx::query_file!(r#"src/queries/is-first-time-today.sql"#, user)
             .fetch_one(&self.pool)
             .await?;
 
