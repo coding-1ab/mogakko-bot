@@ -1,1 +1,1 @@
-truncate table if exists `vc_activities`;
+delete from `vc_activities`;
