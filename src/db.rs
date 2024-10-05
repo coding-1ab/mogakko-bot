@@ -99,7 +99,7 @@ impl Db {
         Ok(sqlx::query_file!("src/queries/leaderboard.sql")
             .map(|row| LeaderboardRecord {
                 user: row.user.parse().unwrap(),
-                days: 0,
+                days: row.days as u32,
                 total_duration: Duration::seconds(row.total_duration),
             })
             .fetch_all(&self.pool)
