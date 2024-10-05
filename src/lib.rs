@@ -1,6 +1,7 @@
 mod bot;
 mod config;
 mod db;
+mod utils;
 
 pub use bot::*;
 pub use config::*;
