@@ -16,7 +16,7 @@ impl<R, E: Debug> LogUtil<R> for Result<R, E> {
         match self {
             Ok(v) => Some(v),
             Err(err) => {
-                eprintln!("{:?}", err);
+                error!("{:?}", err);
                 None
             }
         }

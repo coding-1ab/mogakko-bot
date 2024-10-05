@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 use std::sync::Arc;
 
+use chrono::FixedOffset;
+use log::{error, trace};
 use serenity::all::{
     ChannelId, CommandOptionType, CommandType, CreateCommand, CreateCommandOption, CreateEmbed,
     CreateEmbedAuthor, CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage,
@@ -43,17 +45,17 @@ impl EventHandler for Handler {
         let channel = match ctx.http.get_channel(self.config.vc_id.into()).await {
             Ok(Channel::Guild(v)) => v,
             Ok(_) => {
-                eprintln!("Specified channel is not from guild!");
+                error!("Specified channel is not from guild!");
                 return;
             }
             Err(e) => {
-                eprintln!("Invalid channel id! Error: {:?}", e);
+                error!("Invalid channel id! Error: {:?}", e);
                 return;
             }
         };
 
         if ChannelType::Voice != channel.kind {
-            eprintln!("Specified channel is not vc!");
+            error!("Specified channel is not vc!");
             return;
         }
 
@@ -81,10 +83,12 @@ impl EventHandler for Handler {
         });
 
         for previous in previous_participants {
+            trace!("Deleting {}", previous);
             self.db.leaves(previous).await.unwrap();
         }
 
         for current in current_participants {
+            trace!("Injecting {}", current);
             self.db.joins(current).await.unwrap();
         }
 
@@ -183,10 +187,10 @@ impl EventHandler for Handler {
                     .send_message(
                         ChannelId::new(self.config.vc_id.get()),
                         vec![],
-                        &format!(
+                        &CreateMessage::new().content(format!(
                             "<@{}>님께서 오늘 모각코 출석 미션을 달성하셨습니다!⭐",
                             user_id
-                        ),
+                        )),
                     )
                     .await
                     .unwrap();
@@ -237,7 +241,7 @@ impl EventHandler for Handler {
 pub struct Bot {
     pub client: Client,
     pub db: Arc<Db>,
-    pub scheduler: Scheduler,
+    pub scheduler: Scheduler<FixedOffset>,
 }
 
 impl Bot {
@@ -266,13 +270,13 @@ impl Bot {
         let cache1 = client.cache.clone();
         let cache2 = client.cache.clone();
 
-        let mut scheduler = Scheduler::utc();
+        let mut scheduler = Scheduler::new_in_timezone(FixedOffset::east_opt(9 * 3600).unwrap());
         scheduler.add(Job::named("six", daily("18"), move || {
             let db = db1.clone();
             let http = http1.clone();
             let cache = cache1.clone();
             async move {
-                println!("Resetting at 6PM");
+                trace!("Resetting at 6PM");
 
                 let mut set = JoinSet::new();
                 let members = http
@@ -289,7 +293,7 @@ impl Bot {
                     let db = db.clone();
                     set.spawn(async move {
                         let id = member.user.id.get();
-                        println!("Injecting {}", id);
+                        trace!("Injecting {}", id);
                         db.joins(id).await
                     });
                 }
@@ -329,7 +333,7 @@ impl Bot {
             let http = http2.clone();
             let cache = cache2.clone();
             async move {
-                println!("Resetting at 10PM");
+                trace!("Resetting at 10PM");
 
                 let mut set = JoinSet::new();
                 let members = http
@@ -345,7 +349,7 @@ impl Bot {
                     let db = db.clone();
                     set.spawn(async move {
                         let id = member.user.id.get();
-                        println!("Removing {}", id);
+                        trace!("Removing {}", id);
                         db.leaves(id).await.unwrap()
                     });
                 }
@@ -382,7 +386,7 @@ impl Bot {
     }
 
     pub async fn leaderboard(db: Arc<Db>, client: Arc<Http>) -> CreateInteractionResponseMessage {
-        let mut leaderboard: Vec<LeaderboardRecord> = db.leaderboard().await.unwrap();
+        let mut leaderboard: Vec<LeaderboardRecord> = db.leaderboard(5).await.unwrap();
 
         leaderboard.sort_unstable_by(|a, b| {
             let cmp1 = b.days.cmp(&a.days);
@@ -452,7 +456,7 @@ impl Bot {
     }
 
     pub async fn table(db: Arc<Db>) -> CreateInteractionResponseMessage {
-        let mut leaderboard = db.leaderboard().await.unwrap();
+        let mut leaderboard = db.leaderboard(100).await.unwrap();
         leaderboard.sort_unstable_by(|a, b| {
             let cmp1 = b.days.cmp(&a.days);
 
@@ -465,7 +469,13 @@ impl Bot {
 
         let mut line = String::new();
         for (idx, record) in leaderboard.into_iter().enumerate() {
-            line.push_str(&format!("{}등: <@{}>\n", idx + 1, record.user));
+            line.push_str(&format!(
+                "{}등: <@{}> 출석 일수: {} 총 개발 시간: {}\n",
+                idx + 1,
+                record.user,
+                record.days,
+                record.total_duration
+            ));
         }
 
         CreateInteractionResponseMessage::new()
@@ -514,14 +524,14 @@ impl Bot {
 
         let user = client.get_user(UserId::new(target)).await.unwrap();
 
-        const BLACK_SQUARE: char = '⬛';
-        const WHITE_SQUARE: char = '⬜';
-        const RED_SQUARE: char = '🟥';
-        const GREEN_SQUARE: char = '🟩';
+        const OTHER_MONTH: &str = "⬛";
+        const NOT_YET: &str = "⬜";
+        const ABSENT: &str = "🟪";
+        const ATTEND: &str = "🟩";
 
         let mut description = String::new();
         for _ in 0..top_left_offset {
-            description.push(BLACK_SQUARE);
+            description.push_str(OTHER_MONTH);
         }
 
         let days_in_month = end.day();
@@ -532,34 +542,33 @@ impl Bot {
             let slot = day + top_left_offset - 1;
 
             let emoji = if now < cursor {
-                WHITE_SQUARE
+                NOT_YET
             } else if statistics.calendar.contains(&cursor) {
-                GREEN_SQUARE
+                ATTEND
             } else {
-                RED_SQUARE
+                ABSENT
             };
 
-            description.push(emoji);
+            description.push_str(emoji);
             if (slot + 1) % 7 == 0 {
                 description.push('\n');
             }
         }
 
         for _ in 0..bottom_right_offset {
-            description.push(BLACK_SQUARE);
+            description.push_str(OTHER_MONTH);
         }
-
-        description.push('\n');
-        description.push_str("참여 일 수: ");
-        description.push_str(statistics.days.to_string().as_str());
-        description.push('\n');
-        description.push_str("누적 참여 시간: ");
-        description.push_str(Self::pretty_duration(statistics.total_duration).as_str());
 
         let embed = CreateEmbed::new()
             .title(format!("{}님의 모각코 참여 통계", user.name))
             .thumbnail(user.avatar_url().unwrap_or(user.default_avatar_url()))
-            .description(description);
+            .description(description)
+            .field("참여 일수", statistics.days.to_string(), true)
+            .field(
+                "총 개발 시간",
+                Self::pretty_duration(statistics.total_duration),
+                true,
+            );
 
         CreateInteractionResponseMessage::new().embed(embed)
     }
@@ -583,6 +592,10 @@ impl Bot {
         if minutes != 0 {
             duration_message.push_str(&minutes.to_string());
             duration_message.push_str("분 ");
+        }
+
+        if duration_message.is_empty() {
+            duration_message.push_str("0분")
         }
 
         duration_message
