@@ -153,8 +153,6 @@ impl EventHandler for Handler {
             state: Some("모각코 이벤트 진행 중...".to_owned()),
             url: None,
         }));
-
-        println!("Bot is ready!");
     }
 
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
