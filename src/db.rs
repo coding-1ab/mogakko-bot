@@ -9,13 +9,13 @@ use crate::{
 };
 
 pub struct LeaderboardRecord {
-    pub user: u64,
+    pub user: String,
     pub days: u32,
     pub total_duration: Duration,
 }
 
 pub struct UserStatistics {
-    pub user: u64,
+    pub user: String,
     pub days: u32,
     pub total_duration: Duration,
     pub calendar: Vec<Date>,
@@ -96,8 +96,15 @@ impl Db {
     }
 
     // get server leaderboard
-    pub async fn leaderboard() -> anyhow::Result<Vec<LeaderboardRecord>> {
-        todo!()
+    pub async fn leaderboard(&self) -> anyhow::Result<Vec<LeaderboardRecord>> {
+        Ok(sqlx::query_file!("src/queries/leaderboard.sql")
+            .map(|row| LeaderboardRecord {
+                user: row.user,
+                days: 0,
+                total_duration: Duration::seconds(row.total_duration),
+            })
+            .fetch_all(&self.pool)
+            .await?)
     }
 
     // show user statistics
