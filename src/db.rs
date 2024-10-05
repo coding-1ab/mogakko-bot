@@ -1,7 +1,7 @@
 use std::{sync::Arc, u32};
 
 use sqlx::{Pool, Sqlite};
-use time::{Date, Duration};
+use time::{format_description::well_known::Rfc3339, Date, Duration};
 
 use crate::{
     utils::{is_valid_time, now_kst},
@@ -35,7 +35,7 @@ impl Db {
         Ok(Self { config, pool })
     }
 
-    async fn find_lock(&self, user: String) -> anyhow::Result<Option<i64>> {
+    async fn find_lock(&self, user: &str) -> anyhow::Result<Option<i64>> {
         let lock = sqlx::query!(
             r#"select id from vc_activities where user = ? and left is null"#,
             user
@@ -61,9 +61,18 @@ impl Db {
     }
 
     // when user leaves
-    pub async fn leaves(user: String) -> anyhow::Result<()> {
-        todo!()
-        // sqlx::query(r#"update vc_activities set left = ? where "#)
+    pub async fn leaves(&self, user: String) -> anyhow::Result<()> {
+        let Some(id) = self.find_lock(&user).await? else {
+            return Ok(());
+        };
+
+        let now = now_kst().format(&Rfc3339)?;
+
+        sqlx::query!(r#"update vc_activities set left = ? where id = ?"#, now, id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
     }
 
     pub async fn lookup_saved_participants(&self) -> anyhow::Result<Vec<String>> {
