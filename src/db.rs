@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, u32};
 
 use sqlx::{Pool, Sqlite};
 use time::{Date, Duration, Month, OffsetDateTime, UtcOffset};
@@ -35,6 +35,16 @@ impl Db {
         Ok(Self { config, pool })
     }
 
+    async fn find_lock(&self, user: String) -> anyhow::Result<Option<u32>> {
+        let lock: Option<(u32,)> =
+            sqlx::query_as(r#"select id from vc_activities where user = ? and left = null"#)
+                .bind(user)
+                .fetch_optional(&self.pool)
+                .await?;
+
+        Ok(lock.map(|(id,)| id))
+    }
+
     // when user joins
     pub async fn joins(&self, user: String) -> anyhow::Result<()> {
         if !is_valid_time(now_kst()) {
@@ -51,7 +61,7 @@ impl Db {
 
     // when user leaves
     pub async fn leaves(user: String) -> anyhow::Result<()> {
-        todo!()
+        // sqlx::query(r#"update vc_activities set left = ? where "#)
     }
 
     pub async fn lookup_saved_participants(&self) -> anyhow::Result<Vec<String>> {
