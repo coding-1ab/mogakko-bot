@@ -48,10 +48,6 @@ impl EventHandler for Handler {
         let Some(members) = channel.members(ctx.cache).report_on_error() else {
             return;
         };
-
-        for member in members {
-            Db::detected(member.user.id.get()).await.report_on_error();
-        }
     }
 
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
