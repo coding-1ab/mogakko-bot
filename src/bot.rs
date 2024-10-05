@@ -14,11 +14,11 @@ pub struct Handler {
 }
 
 impl Handler {
-    pub fn new(config: Arc<Config>) -> Self {
-        Self {
-            db: Db::new(config.clone()),
+    pub async fn new(config: Arc<Config>) -> anyhow::Result<Self> {
+        Ok(Self {
+            db: Db::new(config.clone()).await?,
             config,
-        }
+        })
     }
 }
 
@@ -77,7 +77,7 @@ impl Bot {
     pub async fn new(config: Config) -> anyhow::Result<Self> {
         let config = Arc::new(config);
 
-        let handler = Handler::new(config.clone());
+        let handler = Handler::new(config.clone()).await?;
 
         let client = Client::builder(
             &config.token,
