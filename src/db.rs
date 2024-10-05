@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use sqlx::{Pool, Sqlite};
 use time::{Date, Duration, PrimitiveDateTime};
 
 use crate::Config;
@@ -19,11 +20,16 @@ pub struct UserStatistics {
 
 pub struct Db {
     config: Arc<Config>,
+    pool: Pool<Sqlite>,
 }
 
 impl Db {
-    pub fn new(config: Arc<Config>) -> Self {
-        Self { config }
+    pub async fn new(config: Arc<Config>) -> anyhow::Result<Self> {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect(&config.database_url)
+            .await?;
+
+        Ok(Self { config, pool })
     }
 
     // when user joins
