@@ -107,7 +107,27 @@ impl Db {
     }
 
     // show user statistics
-    pub async fn user_statistics() -> anyhow::Result<UserStatistics> {
+    pub async fn user_statistics(&self, user: User) -> anyhow::Result<Option<UserStatistics>> {
+        let user = user.to_string();
+
+        let st = sqlx::query_file!("src/queries/statistics.sql", user)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        let calendar = sqlx::query_file!("src/queries/statistics-calendar.sql", user)
+            .fetch_all(&self.pool)
+            .await?;
+
         todo!()
+
+        // Ok(
+        //     st.map(|st| UserStatistics {
+        //         rank: st.rank,
+        //         user: st.user,
+        //         days: calendar.len(),
+        //         total_duration: st.total_duration,
+        //         calendar: calendar.iter_mut().map(|r| r.days)
+        //     })
+        // )
     }
 }
