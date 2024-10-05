@@ -8,8 +8,6 @@ use serenity::{
 
 use crate::{db::Db, Config};
 
-const TARGET_CHANNEL_ID: u64 = 1130799520545001482;
-
 pub struct Handler {
     config: Arc<Config>,
     db: Db,
