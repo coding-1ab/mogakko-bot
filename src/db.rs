@@ -1,10 +1,6 @@
-use std::error::Error;
-use std::fmt::{Debug, Display, Formatter};
-use std::sync::Arc;
-
 use std::{
     error::Error,
-    fmt::{Debug, Display, Formatter, Write},
+    fmt::{Debug, Display, Formatter},
     sync::Arc,
 };
 
@@ -88,13 +84,13 @@ impl Db {
     }
 
     // when user joins
-    pub async fn joins(user: u64) -> anyhow::Result<()> {
+    pub async fn joins(user: u64, when: PrimitiveDateTime) -> anyhow::Result<()> {
         println!("user {} joined!", user);
         Ok(())
     }
 
     // when user leaves
-    pub async fn leaves(user: u64) -> anyhow::Result<()> {
+    pub async fn leaves(user: u64, when: PrimitiveDateTime) -> anyhow::Result<()> {
         println!("user {} left!", user);
         Ok(())
     }
