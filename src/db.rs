@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use sqlx::{Pool, Sqlite};
-use time::{Date, Duration, OffsetDateTime, UtcOffset, Month};
+use time::{Date, Duration, Month, OffsetDateTime, UtcOffset};
 
 use crate::{
     utils::{is_valid_time, now_kst},
@@ -51,8 +51,11 @@ impl Db {
 
     // when user leaves
     pub async fn leaves(user: String) -> anyhow::Result<()> {
-        println!("user {} left!", user);
-        Ok(())
+        todo!()
+    }
+
+    pub async fn lookup_saved_participants(&self) -> anyhow::Result<Vec<String>> {
+        todo!()
     }
 
     // get server leaderboard
