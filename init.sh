@@ -1,4 +1,4 @@
 #!/bin/sh
-if [ ! -f "/app/mogakko.db" ]; then
-	cp "/ro/mogakko.db" "/app/mogakko.db"
+if [ ! -f "./mogakko.db" ]; then
+	cp "../mogakko.db" "./mogakko.db"
 fi
