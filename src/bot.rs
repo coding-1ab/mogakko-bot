@@ -403,71 +403,75 @@ impl Bot {
     pub async fn leaderboard(db: Arc<Db>, client: Arc<Http>) -> CreateInteractionResponseMessage {
         let mut leaderboard: Vec<LeaderboardRecord> = db.leaderboard(5).await.unwrap();
 
-        leaderboard.sort_unstable_by(|a, b| {
-            let cmp1 = b.days.cmp(&a.days);
+        let message = CreateInteractionResponseMessage::new();
 
-            if let Ordering::Equal = cmp1 {
-                b.total_duration.cmp(&a.total_duration)
-            } else {
-                cmp1
+        if leaderboard.is_empty() {
+            message.content("아직 집계 전이에요!")
+        } else {
+            leaderboard.sort_unstable_by(|a, b| {
+                let cmp1 = b.days.cmp(&a.days);
+
+                if let Ordering::Equal = cmp1 {
+                    b.total_duration.cmp(&a.total_duration)
+                } else {
+                    cmp1
+                }
+            });
+
+            let mut embeds = Vec::new();
+            for (idx, record) in leaderboard.into_iter().take(10).enumerate() {
+                let user = client.get_user(UserId::new(record.user)).await.unwrap();
+                let place = match idx {
+                    0 => "one",
+                    1 => "two",
+                    2 => "three",
+                    3 => "four",
+                    4 => "five",
+                    5 => "six",
+                    6 => "seven",
+                    7 => "eight",
+                    8 => "nine",
+                    9 => "keycap_ten",
+                    _ => unreachable!(),
+                };
+
+                let color: (u8, u8, u8) = match idx {
+                    0 => (243, 250, 117),
+                    1 => (219, 219, 219),
+                    2 => (135, 62, 35),
+                    _ => BOT_COLOR,
+                };
+
+                let mut title = format!(":{}:등", place);
+                if idx == 0 {
+                    title.push_str("     👑");
+                }
+
+                let duration_message = pretty_duration(record.total_duration);
+
+                let mut embed = CreateEmbed::new()
+                    .title(title)
+                    .color(color)
+                    .thumbnail(user.avatar_url().unwrap_or(user.default_avatar_url()))
+                    .description(format!("<@{}>", record.user))
+                    .field("출석 일수", record.days.to_string(), true)
+                    .field("총 개발 시간", duration_message, true);
+
+                let footer_emoji = match idx {
+                    0 => "🥇",
+                    1 => "🥈",
+                    2 => "🥉",
+                    _ => "",
+                };
+                if !footer_emoji.is_empty() {
+                    embed = embed.footer(CreateEmbedFooter::new(footer_emoji));
+                }
+
+                embeds.push(embed);
             }
-        });
 
-        let mut embeds = Vec::new();
-        for (idx, record) in leaderboard.into_iter().take(10).enumerate() {
-            let user = client.get_user(UserId::new(record.user)).await.unwrap();
-            let place = match idx {
-                0 => "one",
-                1 => "two",
-                2 => "three",
-                3 => "four",
-                4 => "five",
-                5 => "six",
-                6 => "seven",
-                7 => "eight",
-                8 => "nine",
-                9 => "keycap_ten",
-                _ => unreachable!(),
-            };
-
-            let color: (u8, u8, u8) = match idx {
-                0 => (243, 250, 117),
-                1 => (219, 219, 219),
-                2 => (135, 62, 35),
-                _ => BOT_COLOR,
-            };
-
-            let mut title = format!(":{}:등", place);
-            if idx == 0 {
-                title.push_str("     👑");
-            }
-
-            let duration_message = pretty_duration(record.total_duration);
-
-            let mut embed = CreateEmbed::new()
-                .title(title)
-                .color(color)
-                .thumbnail(user.avatar_url().unwrap_or(user.default_avatar_url()))
-                .description(format!("<@{}>", record.user))
-                .field("출석 일수", record.days.to_string(), true)
-                .field("총 개발 시간", duration_message, true);
-
-            let footer_emoji = match idx {
-                0 => "🥇",
-                1 => "🥈",
-                2 => "🥉",
-                _ => "",
-            };
-            if !footer_emoji.is_empty() {
-                embed = embed.footer(CreateEmbedFooter::new(footer_emoji));
-            }
-
-            embeds.push(embed);
+            message.add_embeds(embeds)
         }
-
-        let message = CreateInteractionResponseMessage::new().add_embeds(embeds);
-
-        message
     }
 
     pub async fn table(db: Arc<Db>) -> CreateInteractionResponseMessage {
