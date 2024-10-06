@@ -4,6 +4,8 @@ use dotenvy::{dotenv, Error};
 
 use mogakko_bot::{Bot, Config};
 use serenity::all::validate_token;
+use tracing::info;
+use tracing_subscriber::fmt::init;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -12,6 +14,8 @@ async fn main() -> anyhow::Result<()> {
         Err(e) => return Err(e.into()),
         _ => (),
     }
+
+    init();
 
     let token = var("DISCORD_TOKEN").expect("Environment Variable DISCORD_TOKEN not found!");
     validate_token(&token)?;
@@ -26,6 +30,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let mut bot = Bot::new(config).await?;
+
+    info!("Starting bot");
 
     bot.start().await?;
 
