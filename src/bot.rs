@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::sync::Arc;
 
 use chrono::FixedOffset;
-use log::{error, trace};
+use log::{error, info, trace};
 use serenity::all::{
     ChannelId, CommandOptionType, CommandType, CreateCommand, CreateCommandOption, CreateEmbed,
     CreateEmbedAuthor, CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage,
@@ -42,6 +42,8 @@ impl Handler {
 impl EventHandler for Handler {
     // Crash recovery.
     async fn ready(&self, ctx: Context, _: Ready) {
+        info!("Bot is ready");
+
         let channel = match ctx.http.get_channel(self.config.vc_id.into()).await {
             Ok(Channel::Guild(v)) => v,
             Ok(_) => {
@@ -149,6 +151,8 @@ impl EventHandler for Handler {
             .expect("Unable to create statistics user command!");
 
         change_status(&ctx, users);
+
+        info!("Bot is now fully ready");
     }
 
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
