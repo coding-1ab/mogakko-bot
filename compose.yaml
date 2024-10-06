@@ -1,0 +1,11 @@
+services:
+  bot:
+    build:
+      context: .
+      args:
+        - DATABASE_URL
+    restart: always
+    environment:
+      - DISCORD_TOKEN
+      - CHANNEL_ID
+      - DATABASE_URL
