@@ -483,14 +483,19 @@ impl Bot {
         });
 
         let mut line = String::new();
-        for (idx, record) in leaderboard.into_iter().enumerate() {
-            line.push_str(&format!(
-                "{}등: <@{}> 출석 일수: {} 총 개발 시간: {}\n",
-                idx + 1,
-                record.user,
-                record.days,
-                record.total_duration
-            ));
+
+        if leaderboard.is_empty() {
+            line.push_str("아직 집계 전이에요!");
+        } else {
+            for (idx, record) in leaderboard.into_iter().enumerate() {
+                line.push_str(&format!(
+                    "{}등: <@{}> 출석 일수: {} 총 개발 시간: {}\n",
+                    idx + 1,
+                    record.user,
+                    record.days,
+                    record.total_duration
+                ));
+            }
         }
 
         CreateInteractionResponseMessage::new()
