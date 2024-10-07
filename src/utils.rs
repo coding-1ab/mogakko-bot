@@ -1,4 +1,4 @@
-use serenity::all::{ActivityData, ActivityType, Context};
+use serenity::all::{ActivityData, ActivityType, ShardMessenger};
 use time::{macros::offset, Duration, OffsetDateTime};
 
 pub fn now_kst() -> OffsetDateTime {
@@ -39,7 +39,7 @@ pub fn pretty_duration(duration: Duration) -> String {
     duration_message
 }
 
-pub fn change_status(ctx: &Context, users: usize) {
+pub fn change_status(ctx: &ShardMessenger, users: usize) {
     ctx.set_activity(Some(ActivityData {
         name: "Mogakko".to_owned(),
         kind: ActivityType::Custom,

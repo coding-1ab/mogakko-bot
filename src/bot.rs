@@ -28,13 +28,19 @@ const BOT_COLOR: (u8, u8, u8) = (37, 150, 190);
 pub struct Handler {
     config: Arc<Config>,
     db: Arc<Db>,
+    pub scheduler: RwLock<Scheduler<FixedOffset>>,
 }
 
 impl Handler {
     pub async fn new(config: Arc<Config>) -> anyhow::Result<Self> {
         let db = Db::new(config.clone()).await?.into();
+        let scheduler = Scheduler::new_in_timezone(FixedOffset::east_opt(9 * 3600).unwrap()).into();
 
-        Ok(Self { db, config })
+        Ok(Self {
+            db,
+            config,
+            scheduler,
+        })
     }
 }
 
@@ -150,7 +156,129 @@ impl EventHandler for Handler {
             .await
             .expect("Unable to create statistics user command!");
 
-        change_status(&ctx, users);
+        change_status(&ctx.shard, users);
+
+        let mut scheduler = self.scheduler.write().await;
+        let vc_id = self.config.vc_id;
+        let db1 = self.db.clone();
+        let db2 = self.db.clone();
+        let http1 = ctx.http.clone();
+        let http2 = ctx.http.clone();
+        let cache1 = ctx.cache.clone();
+        let cache2 = ctx.cache.clone();
+        let shard1 = ctx.shard.clone();
+        let shard2 = ctx.shard.clone();
+
+        scheduler.add(Job::named("six", daily("18"), move || {
+            let db = db1.clone();
+            let http = http1.clone();
+            let cache = cache1.clone();
+            let shard = shard1.clone();
+            async move {
+                trace!("Resetting at 6PM");
+
+                let mut set = JoinSet::new();
+                let members = http
+                    .get_channel(vc_id.into())
+                    .await
+                    .unwrap()
+                    .guild()
+                    .unwrap()
+                    .members(cache)
+                    .unwrap();
+
+                change_status(&shard, members.len());
+                let ids: Vec<_> = members.iter().map(|v| v.user.id.get()).collect();
+                for member in members {
+                    let db = db.clone();
+                    set.spawn(async move {
+                        let id = member.user.id.get();
+                        trace!("Injecting {}", id);
+                        db.joins(id).await
+                    });
+                }
+
+                let Channel::Guild(channel) = http.get_channel(vc_id.into()).await.unwrap() else {
+                    unreachable!()
+                };
+
+                let date = now_kst().date();
+
+                let participants = ids
+                    .into_iter()
+                    .map(|v| format!("<@{v}>"))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let embed = CreateEmbed::new()
+                    .author(CreateEmbedAuthor::new("모각코 알림"))
+                    .title(format!(
+                        "{}월 {}일자 모각코 이벤트 시작! 👋",
+                        date.month() as u8,
+                        date.day()
+                    ))
+                    .field("참여자 목록", participants, true);
+                channel
+                    .send_message(http, CreateMessage::new().embed(embed))
+                    .await
+                    .unwrap();
+
+                set.join_all().await.into_iter().for_each(|v| {
+                    v.unwrap();
+                });
+            }
+        }));
+
+        scheduler.add(Job::named("ten", "0 48 17 * * * *", move || {
+            let db = db2.clone();
+            let http = http2.clone();
+            let cache = cache2.clone();
+            let shard = shard2.clone();
+
+            async move {
+                trace!("Resetting at 10PM");
+
+                let mut set = JoinSet::new();
+                let members = http
+                    .get_channel(vc_id.into())
+                    .await
+                    .unwrap()
+                    .guild()
+                    .unwrap()
+                    .members(cache)
+                    .unwrap();
+
+                change_status(&shard, members.len());
+                let mut ids = Vec::with_capacity(members.len());
+                for member in members {
+                    ids.push(format!("<@{}>", member.user.id));
+                    let db = db.clone();
+                    set.spawn(async move {
+                        let id = member.user.id.get();
+                        trace!("Removing {}", id);
+                        db.leaves(id).await.unwrap()
+                    });
+                }
+
+                let mentions = ids.join(", ");
+                let date = now_kst().date();
+                let Channel::Guild(channel) = http.get_channel(vc_id.into()).await.unwrap() else {
+                    unreachable!()
+                };
+                let embed = CreateEmbed::new()
+                    .author(CreateEmbedAuthor::new("모각코 알림"))
+                    .title(format!(
+                        "{}월 {}일자 모각코 이벤트 종료! 👋",
+                        date.month() as u8,
+                        date.day()
+                    ))
+                    .description(format!("{} 모두 수고하셨습니다!", mentions));
+                channel
+                    .send_message(http, CreateMessage::new().embed(embed))
+                    .await
+                    .unwrap();
+                set.join_all().await;
+            }
+        }));
 
         info!("Bot is now fully ready");
     }
@@ -173,7 +301,7 @@ impl EventHandler for Handler {
         if !was_in_vc && now_in_vc {
             let send_message = self.db.joins(user_id).await.unwrap();
             change_status(
-                &ctx,
+                &ctx.shard,
                 self.db.lookup_saved_participants().await.unwrap().len(),
             );
             if send_message {
@@ -194,7 +322,7 @@ impl EventHandler for Handler {
         if was_in_vc && !now_in_vc {
             let send_message = self.db.leaves(user_id).await.unwrap();
             change_status(
-                &ctx,
+                &ctx.shard,
                 self.db.lookup_saved_participants().await.unwrap().len(),
             );
             if send_message {
@@ -256,7 +384,6 @@ impl EventHandler for Handler {
 pub struct Bot {
     pub client: Client,
     pub db: Arc<Db>,
-    pub scheduler: Scheduler<FixedOffset>,
 }
 
 impl Bot {
@@ -277,123 +404,7 @@ impl Bot {
         .event_handler(handler)
         .await?;
 
-        let vc_id = config.vc_id;
-        let db1 = db.clone();
-        let db2 = db.clone();
-        let http1 = client.http.clone();
-        let http2 = client.http.clone();
-        let cache1 = client.cache.clone();
-        let cache2 = client.cache.clone();
-
-        let mut scheduler = Scheduler::new_in_timezone(FixedOffset::east_opt(9 * 3600).unwrap());
-        scheduler.add(Job::named("six", daily("18"), move || {
-            let db = db1.clone();
-            let http = http1.clone();
-            let cache = cache1.clone();
-            async move {
-                trace!("Resetting at 6PM");
-
-                let mut set = JoinSet::new();
-                let members = http
-                    .get_channel(vc_id.into())
-                    .await
-                    .unwrap()
-                    .guild()
-                    .unwrap()
-                    .members(cache)
-                    .unwrap();
-
-                let ids: Vec<_> = members.iter().map(|v| v.user.id.get()).collect();
-                for member in members {
-                    let db = db.clone();
-                    set.spawn(async move {
-                        let id = member.user.id.get();
-                        trace!("Injecting {}", id);
-                        db.joins(id).await
-                    });
-                }
-
-                let Channel::Guild(channel) = http.get_channel(vc_id.into()).await.unwrap() else {
-                    unreachable!()
-                };
-
-                let date = now_kst().date();
-
-                let participants = ids
-                    .into_iter()
-                    .map(|v| format!("<@{v}>"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let embed = CreateEmbed::new()
-                    .author(CreateEmbedAuthor::new("모각코 알림"))
-                    .title(format!(
-                        "{}월 {}일자 모각코 이벤트 시작! 👋",
-                        date.month() as u8,
-                        date.day()
-                    ))
-                    .field("참여자 목록", participants, true);
-                channel
-                    .send_message(http, CreateMessage::new().embed(embed))
-                    .await
-                    .unwrap();
-
-                set.join_all().await.into_iter().for_each(|v| {
-                    v.unwrap();
-                });
-            }
-        }));
-
-        scheduler.add(Job::named("ten", daily("22"), move || {
-            let db = db2.clone();
-            let http = http2.clone();
-            let cache = cache2.clone();
-            async move {
-                trace!("Resetting at 10PM");
-
-                let mut set = JoinSet::new();
-                let members = http
-                    .get_channel(vc_id.into())
-                    .await
-                    .unwrap()
-                    .guild()
-                    .unwrap()
-                    .members(cache)
-                    .unwrap();
-
-                for member in members {
-                    let db = db.clone();
-                    set.spawn(async move {
-                        let id = member.user.id.get();
-                        trace!("Removing {}", id);
-                        db.leaves(id).await.unwrap()
-                    });
-                }
-
-                let date = now_kst().date();
-                let Channel::Guild(channel) = http.get_channel(vc_id.into()).await.unwrap() else {
-                    unreachable!()
-                };
-                let embed = CreateEmbed::new()
-                    .author(CreateEmbedAuthor::new("모각코 알림"))
-                    .title(format!(
-                        "{}월 {}일자 모각코 이벤트 종료! 👋",
-                        date.month() as u8,
-                        date.day()
-                    ))
-                    .description("모두 수고하셨습니다!");
-                channel
-                    .send_message(http, CreateMessage::new().embed(embed))
-                    .await
-                    .unwrap();
-                set.join_all().await;
-            }
-        }));
-
-        Ok(Self {
-            client,
-            db,
-            scheduler,
-        })
+        Ok(Self { client, db })
     }
 
     pub async fn start(&mut self) -> serenity::Result<()> {
