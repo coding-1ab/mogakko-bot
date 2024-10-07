@@ -67,12 +67,16 @@ impl EventHandler for Handler {
             return;
         }
 
-        let mut previous_participants: Vec<_> = self.db.lookup_saved_participants().await.unwrap();
+        let mut previous_participants: Vec<_> = self
+            .db
+            .lookup_saved_participants()
+            .await
+            .expect("Handler::ready: Unable to fetch saved participants");
 
         let mut current_participants: Vec<_> = if is_valid_time(now_kst()) {
             channel
                 .members(ctx.cache.clone())
-                .unwrap()
+                .expect("Handler::ready: Unable to fetch member list")
                 .into_iter()
                 .map(|member| member.user.id.get())
                 .collect()
@@ -93,12 +97,16 @@ impl EventHandler for Handler {
 
         for previous in previous_participants {
             trace!("Deleting {}", previous);
-            self.db.leaves(previous).await.unwrap();
+            self.db.leaves(previous).await.expect(&format!(
+                "Handler::ready: Unable to record LEAVE event for {previous}"
+            ));
         }
 
         for current in current_participants {
             trace!("Injecting {}", current);
-            self.db.joins(current).await.unwrap();
+            self.db.joins(current).await.expect(&format!(
+                "Handler::ready: Unable to record JOIN event for {current}"
+            ));
         }
 
         channel
@@ -177,15 +185,17 @@ impl EventHandler for Handler {
             async move {
                 trace!("Resetting at 6PM");
 
-                let mut set = JoinSet::new();
-                let members = http
+                let mut set: JoinSet<()> = JoinSet::new();
+
+                let channel = http
                     .get_channel(vc_id.into())
                     .await
-                    .unwrap()
+                    .expect("Handler::ready::six: Unable to get channel")
                     .guild()
-                    .unwrap()
+                    .expect("Handler::ready::six: Specified channel is not guild channel");
+                let members = channel
                     .members(cache)
-                    .unwrap();
+                    .expect("Handler::ready::six: Unable to get members from channel");
 
                 change_status(&shard, members.len());
                 let ids: Vec<_> = members.iter().map(|v| v.user.id.get()).collect();
@@ -194,13 +204,11 @@ impl EventHandler for Handler {
                     set.spawn(async move {
                         let id = member.user.id.get();
                         trace!("Injecting {}", id);
-                        db.joins(id).await
+                        db.joins(id).await.expect(&format!(
+                            "Handler::ready::six: Unable to record JOIN event for detected user {id}"
+                        ));
                     });
                 }
-
-                let Channel::Guild(channel) = http.get_channel(vc_id.into()).await.unwrap() else {
-                    unreachable!()
-                };
 
                 let date = now_kst().date();
 
@@ -220,11 +228,9 @@ impl EventHandler for Handler {
                 channel
                     .send_message(http, CreateMessage::new().embed(embed))
                     .await
-                    .unwrap();
+                    .expect("Handler::ready::six: Unable to send event start message");
 
-                set.join_all().await.into_iter().for_each(|v| {
-                    v.unwrap();
-                });
+                set.join_all().await;
             }
         }));
 
@@ -238,14 +244,15 @@ impl EventHandler for Handler {
                 trace!("Resetting at 10PM");
 
                 let mut set = JoinSet::new();
-                let members = http
+                let channel = http
                     .get_channel(vc_id.into())
                     .await
-                    .unwrap()
+                    .expect("Handler::ready::ten: Unable to get channel")
                     .guild()
-                    .unwrap()
+                    .expect("Handler::ready::ten: Specified channel is not guild channel");
+                let members = channel
                     .members(cache)
-                    .unwrap();
+                    .expect("Handler::ready::ten: Unable to get members from channel");
 
                 change_status(&shard, members.len());
                 let mut ids = Vec::with_capacity(members.len());
@@ -255,15 +262,15 @@ impl EventHandler for Handler {
                     set.spawn(async move {
                         let id = member.user.id.get();
                         trace!("Removing {}", id);
-                        db.leaves(id).await.unwrap()
+                        db.leaves(id)
+                            .await
+                            .expect("Handler::ready::ten: Unable to record LEAVE")
                     });
                 }
 
                 let mentions = ids.join(", ");
                 let date = now_kst().date();
-                let Channel::Guild(channel) = http.get_channel(vc_id.into()).await.unwrap() else {
-                    unreachable!()
-                };
+
                 let embed = CreateEmbed::new()
                     .author(CreateEmbedAuthor::new("모각코 알림"))
                     .title(format!(
@@ -275,7 +282,7 @@ impl EventHandler for Handler {
                 channel
                     .send_message(http, CreateMessage::new().embed(embed))
                     .await
-                    .unwrap();
+                    .expect("Handler::ready::ten: Unable to send event end message");
                 set.join_all().await;
             }
         }));
@@ -298,45 +305,55 @@ impl EventHandler for Handler {
             .map(|v| v.get() == self.config.vc_id.get())
             .unwrap_or(false);
 
+        if was_in_vc == now_in_vc {
+            return;
+        }
+
+        let participants = self
+            .db
+            .lookup_saved_participants()
+            .await
+            .expect("Handler::voice_state_update: Unable to fetch saved participants");
+
         if !was_in_vc && now_in_vc {
-            let send_message = self.db.joins(user_id).await.unwrap();
-            change_status(
-                &ctx.shard,
-                self.db.lookup_saved_participants().await.unwrap().len(),
-            );
+            let send_message = self
+                .db
+                .joins(user_id)
+                .await
+                .expect("Handler::voice_state_update: Unable to send join message");
+            change_status(&ctx.shard, participants.len());
             if send_message {
                 ctx.http
                     .send_message(
                         ChannelId::new(self.config.vc_id.get()),
                         vec![],
                         &format!(
-                            "<@{}>님께서 오늘 모각코 출석 미션을 달성하셨습니다!⭐",
+                            "<@{}> 오늘 모각코 이벤트에 참여하신 것을 환영합니다!⭐",
                             user_id
                         ),
                     )
                     .await
-                    .unwrap();
+                    .expect("Handler::voice_state_update: Unable to send join message");
             }
         }
 
         if was_in_vc && !now_in_vc {
-            let send_message = self.db.leaves(user_id).await.unwrap();
-            change_status(
-                &ctx.shard,
-                self.db.lookup_saved_participants().await.unwrap().len(),
-            );
+            let send_message = self.db.leaves(user_id).await.expect(&format!(
+                "Handler::voice_state_update: Unable to record LEAVE event for {user_id}"
+            ));
+            change_status(&ctx.shard, participants.len());
             if send_message {
                 ctx.http
                     .send_message(
                         ChannelId::new(self.config.vc_id.get()),
                         vec![],
                         &CreateMessage::new().content(format!(
-                            "<@{}>님께서 오늘 모각코 출석 미션을 달성하셨습니다!⭐",
+                            "<@{}> 님께서 오늘 모각코 출석 미션을 달성하셨습니다!⭐",
                             user_id
                         )),
                     )
                     .await
-                    .unwrap();
+                    .expect("Handler::voice_state_update: Unable to send leave message");
             }
         }
     }
@@ -377,7 +394,7 @@ impl EventHandler for Handler {
         interaction
             .create_response(ctx.http, builder)
             .await
-            .unwrap();
+            .expect("Handler::interaction_create: Unable to respond");
     }
 }
 
@@ -412,7 +429,10 @@ impl Bot {
     }
 
     pub async fn leaderboard(db: Arc<Db>, client: Arc<Http>) -> CreateInteractionResponseMessage {
-        let mut leaderboard: Vec<LeaderboardRecord> = db.leaderboard(5).await.unwrap();
+        let mut leaderboard: Vec<LeaderboardRecord> = db
+            .leaderboard(5)
+            .await
+            .expect("Bot::leaderboard: Unable to fetch leaderboard");
 
         let message = CreateInteractionResponseMessage::new();
 
@@ -431,7 +451,13 @@ impl Bot {
 
             let mut embeds = Vec::new();
             for (idx, record) in leaderboard.into_iter().take(10).enumerate() {
-                let user = client.get_user(UserId::new(record.user)).await.unwrap();
+                let user = client
+                    .get_user(UserId::new(record.user))
+                    .await
+                    .expect(&format!(
+                        "Bot::leaderboard: Unable to fetch user {}",
+                        record.user
+                    ));
                 let place = match idx {
                     0 => "one",
                     1 => "two",
@@ -486,7 +512,10 @@ impl Bot {
     }
 
     pub async fn table(db: Arc<Db>) -> CreateInteractionResponseMessage {
-        let mut leaderboard = db.leaderboard(100).await.unwrap();
+        let mut leaderboard = db
+            .leaderboard(100)
+            .await
+            .expect("Bot::table: Unable to fetch leaderboard");
         leaderboard.sort_unstable_by(|a, b| {
             let cmp1 = b.days.cmp(&a.days);
 
@@ -523,7 +552,11 @@ impl Bot {
         client: Arc<Http>,
         target: u64,
     ) -> CreateInteractionResponseMessage {
-        let statistics = match db.user_statistics(target).await.unwrap() {
+        let statistics = match db
+            .user_statistics(target)
+            .await
+            .expect("Bot::statistics: Unable to fetch statistics")
+        {
             Some(v) => v,
             None => UserStatistics {
                 rank: 0,
@@ -557,7 +590,10 @@ impl Bot {
             Weekday::Sunday => 6,
         };
 
-        let user = client.get_user(UserId::new(target)).await.unwrap();
+        let user = client
+            .get_user(UserId::new(target))
+            .await
+            .expect("Bot::statistics: Unable to fetch user");
 
         const OTHER_MONTH: &str = "⬛";
         const NOT_YET: &str = "⬜";
