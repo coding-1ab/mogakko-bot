@@ -228,7 +228,7 @@ impl EventHandler for Handler {
             }
         }));
 
-        scheduler.add(Job::named("ten", "0 48 17 * * * *", move || {
+        scheduler.add(Job::named("ten", daily("22"), move || {
             let db = db2.clone();
             let http = http2.clone();
             let cache = cache2.clone();
