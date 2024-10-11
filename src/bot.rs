@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::FixedOffset;
@@ -167,13 +168,16 @@ impl EventHandler for Handler {
         change_status(&ctx.shard, users);
 
         let mut scheduler = self.scheduler.write().await;
-        let vc_id = self.config.vc_id;
+        let vc_id = self.config.vc_id.into();
         let db1 = self.db.clone();
         let db2 = self.db.clone();
+        let db3 = self.db.clone();
         let http1 = ctx.http.clone();
         let http2 = ctx.http.clone();
+        let http3 = ctx.http.clone();
         let cache1 = ctx.cache.clone();
         let cache2 = ctx.cache.clone();
+        let cache3 = ctx.cache.clone();
         let shard1 = ctx.shard.clone();
         let shard2 = ctx.shard.clone();
 
@@ -188,7 +192,7 @@ impl EventHandler for Handler {
                 let mut set: JoinSet<()> = JoinSet::new();
 
                 let channel = http
-                    .get_channel(vc_id.into())
+                    .get_channel(vc_id)
                     .await
                     .expect("Handler::ready::six: Unable to get channel")
                     .guild()
@@ -245,7 +249,7 @@ impl EventHandler for Handler {
 
                 let mut set = JoinSet::new();
                 let channel = http
-                    .get_channel(vc_id.into())
+                    .get_channel(vc_id)
                     .await
                     .expect("Handler::ready::ten: Unable to get channel")
                     .guild()
@@ -284,6 +288,41 @@ impl EventHandler for Handler {
                     .await
                     .expect("Handler::ready::ten: Unable to send event end message");
                 set.join_all().await;
+            }
+        }));
+
+        scheduler.add(Job::named("check", "0 * * * * * *", || {
+            let db = db3.clone();
+            let http = http3.clone();
+            let cache = cache3.clone();
+            async move {
+                let channel = http
+                    .get_channel(vc_id)
+                    .await
+                    .expect("Handler::ready::check: Unable to get channel")
+                    .guild()
+                    .expect("Handler::ready::check: Specified channel is not guild channel");
+                let members: HashSet<_> = channel
+                    .members(cache)
+                    .expect("Handler::ready::check: Unable to get members from channel")
+                    .into_iter()
+                    .map(|member| member.user.id.get())
+                    .collect();
+
+                let db_members: HashSet<_> = db
+                    .lookup_saved_participants()
+                    .await
+                    .expect("Handler::ready::check Unable to fetch saved participants")
+                    .into_iter()
+                    .collect();
+
+                for leave in db_members.difference(&members) {
+                    db.leaves(*leave)
+                }
+
+                for join in members.difference(&db_members) {
+                    db.joins(*join)
+                }
             }
         }));
 
