@@ -439,16 +439,6 @@ impl Bot {
         if leaderboard.is_empty() {
             message.content("아직 집계 전이에요!")
         } else {
-            leaderboard.sort_unstable_by(|a, b| {
-                let cmp1 = b.days.cmp(&a.days);
-
-                if let Ordering::Equal = cmp1 {
-                    b.total_duration.cmp(&a.total_duration)
-                } else {
-                    cmp1
-                }
-            });
-
             let mut embeds = Vec::new();
             for (idx, record) in leaderboard.into_iter().take(10).enumerate() {
                 let user = client
@@ -516,15 +506,6 @@ impl Bot {
             .leaderboard(100)
             .await
             .expect("Bot::table: Unable to fetch leaderboard");
-        leaderboard.sort_unstable_by(|a, b| {
-            let cmp1 = b.days.cmp(&a.days);
-
-            if let Ordering::Equal = cmp1 {
-                b.total_duration.cmp(&a.total_duration)
-            } else {
-                cmp1
-            }
-        });
 
         let mut line = String::new();
 
